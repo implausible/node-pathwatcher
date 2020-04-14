@@ -7,11 +7,8 @@
 // Size of the buffer to store result of ReadDirectoryChangesW.
 static const unsigned int kDirectoryWatcherBufferSize = 4096;
 
-// Object template to create representation of WatcherHandle.
-static Nan::Persistent<ObjectTemplate> g_object_template;
-
 // Mutex for the HandleWrapper map.
-static uv_mutex_t g_handle_wrap_map_mutex;
+static std::mutex g_handle_wrap_map_mutex;
 
 // The events to be waited on.
 static std::vector<HANDLE> g_events;
@@ -21,15 +18,6 @@ static HANDLE g_wake_up_event;
 
 // The dummy event to ensure we are not waiting on a file handle when destroying it.
 static HANDLE g_file_handles_free_event;
-
-struct ScopedLocker {
-  explicit ScopedLocker(uv_mutex_t& mutex) : mutex_(&mutex) { uv_mutex_lock(mutex_); }
-  ~ScopedLocker() { Unlock(); }
-
-  void Unlock() { uv_mutex_unlock(mutex_); }
-
-  uv_mutex_t* mutex_;
-};
 
 struct HandleWrapper {
   HandleWrapper(WatcherHandle handle, const char* path_str)
@@ -98,34 +86,12 @@ static bool QueueReaddirchanges(HandleWrapper* handle) {
                                NULL) == TRUE;
 }
 
-Local<Value> WatcherHandleToV8Value(WatcherHandle handle) {
-  Local<v8::Context> context = Nan::GetCurrentContext();
-  Local<Value> value = Nan::New(g_object_template)->NewInstance(context).ToLocalChecked();
-  Nan::SetInternalFieldPointer(value->ToObject(context).ToLocalChecked(), 0, handle);
-  return value;
-}
-
-WatcherHandle V8ValueToWatcherHandle(Local<Value> value) {
-  return reinterpret_cast<WatcherHandle>(Nan::GetInternalFieldPointer(
-    value->ToObject(Nan::GetCurrentContext()).ToLocalChecked(), 0));
-}
-
-bool IsV8ValueWatcherHandle(Local<Value> value) {
-  return value->IsObject() &&
-    value->ToObject(Nan::GetCurrentContext()).ToLocalChecked()->InternalFieldCount() == 1;
-}
-
 void PlatformInit() {
-  uv_mutex_init(&g_handle_wrap_map_mutex);
-
   g_file_handles_free_event = CreateEvent(NULL, TRUE, TRUE, NULL);
   g_wake_up_event = CreateEvent(NULL, FALSE, FALSE, NULL);
   g_events.push_back(g_wake_up_event);
 
-  g_object_template.Reset(Nan::New<ObjectTemplate>());
-  Nan::New(g_object_template)->SetInternalFieldCount(1);
-
-  WakeupNewThread();
+  SignalPlatformInitialized();
 }
 
 void PlatformThread() {
@@ -133,7 +99,7 @@ void PlatformThread() {
     // Do not use g_events directly, since reallocation could happen when there
     // are new watchers adding to g_events when WaitForMultipleObjects is still
     // polling.
-    ScopedLocker locker(g_handle_wrap_map_mutex);
+    std::lock_guard<std::mutex> locker(g_handle_wrap_map_mutex);
     std::vector<HANDLE> copied_events(g_events);
     locker.Unlock();
 
@@ -149,7 +115,7 @@ void PlatformThread() {
       if (copied_events[i] == g_wake_up_event)
         continue;
 
-      ScopedLocker locker(g_handle_wrap_map_mutex);
+      std::lock_guard<std::mutex> locker(g_handle_wrap_map_mutex);
 
       HandleWrapper* handle = HandleWrapper::Get(copied_events[i]);
       if (!handle || handle->canceled)
@@ -272,7 +238,7 @@ WatcherHandle PlatformWatch(const char* path) {
 
   std::unique_ptr<HandleWrapper> handle;
   {
-    ScopedLocker locker(g_handle_wrap_map_mutex);
+    std::lock_guard<std::mutex> locker(g_handle_wrap_map_mutex);
     handle.reset(new HandleWrapper(dir_handle, path));
   }
 
@@ -291,7 +257,7 @@ void PlatformUnwatch(WatcherHandle key) {
   if (PlatformIsHandleValid(key)) {
     HandleWrapper* handle;
     {
-      ScopedLocker locker(g_handle_wrap_map_mutex);
+      std::lock_guard<std::mutex> locker(g_handle_wrap_map_mutex);
       handle = HandleWrapper::Get(key);
       handle->Cancel();
     }

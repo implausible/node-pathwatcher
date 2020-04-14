@@ -4,31 +4,29 @@
 #include <map>
 
 #include "common.h"
-#include "unsafe_persistent.h"
 
-class HandleMap : public Nan::ObjectWrap {
+class HandleMap : public Napi::ObjectWrap<HandleMap> {
  public:
-  static void Initialize(Local<Object> target);
+  static void Initialize(Napi::Env env, Napi::Object exports);
+  HandleMap(const Napi::CallbackInfo &info);
+  virtual ~HandleMap();
 
  private:
-  typedef std::map<WatcherHandle, NanUnsafePersistent<Value> > Map;
-
-  HandleMap();
-  virtual ~HandleMap();
+  static Napi::FunctionReference constructor;
+  typedef std::map<WatcherHandle, Napi::Reference<Napi::Value> > Map;
 
   bool Has(WatcherHandle key) const;
   bool Erase(WatcherHandle key);
   void Clear();
 
-  static void DisposeHandle(NanUnsafePersistent<Value>& value);
+  static void DisposeHandle(Napi::Reference<Napi::Value> &value);
 
-  static NAN_METHOD(New);
-  static NAN_METHOD(Add);
-  static NAN_METHOD(Get);
-  static NAN_METHOD(Has);
-  static NAN_METHOD(Values);
-  static NAN_METHOD(Remove);
-  static NAN_METHOD(Clear);
+  Napi::Value Add(const Napi::CallbackInfo &info);
+  Napi::Value Get(const Napi::CallbackInfo &info);
+  Napi::Value Has(const Napi::CallbackInfo &info);
+  Napi::Value Values(const Napi::CallbackInfo &info);
+  Napi::Value Remove(const Napi::CallbackInfo &info);
+  Napi::Value Clear(const Napi::CallbackInfo &info);
 
   Map map_;
 };

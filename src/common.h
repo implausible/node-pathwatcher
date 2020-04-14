@@ -1,25 +1,28 @@
 #ifndef SRC_COMMON_H_
 #define SRC_COMMON_H_
 
+#include <condition_variable>
+#include <mutex>
+#include <napi.h>
+#include <string>
+#include <thread>
+#include <uv.h>
 #include <vector>
-
-#include "nan.h"
-using namespace v8;
 
 #ifdef _WIN32
 // Platform-dependent definetion of handle.
 typedef HANDLE WatcherHandle;
 
 // Conversion between V8 value and WatcherHandle.
-Local<Value> WatcherHandleToV8Value(WatcherHandle handle);
-WatcherHandle V8ValueToWatcherHandle(Local<Value> value);
-bool IsV8ValueWatcherHandle(Local<Value> value);
+#define WatcherHandleToV8Value(h) Napi::External<void>::New(env, h)
+#define V8ValueToWatcherHandle(v) v.As<Napi::External<void>>().Data()
+#define IsV8ValueWatcherHandle(v) v.Type() == napi_external
 #else
 // Correspoding definetions on OS X and Linux.
 typedef int32_t WatcherHandle;
-#define WatcherHandleToV8Value(h) Nan::New<Integer>(h)
-#define V8ValueToWatcherHandle(v) v->Int32Value(Nan::GetCurrentContext()).FromJust()
-#define IsV8ValueWatcherHandle(v) v->IsInt32()
+#define WatcherHandleToV8Value(h) Napi::Number::New(env, h)
+#define V8ValueToWatcherHandle(v) v.ToNumber().Int32Value()
+#define IsV8ValueWatcherHandle(v) v.IsNumber()
 #endif
 
 void PlatformInit();
@@ -40,17 +43,17 @@ enum EVENT_TYPE {
   EVENT_CHILD_CREATE,
 };
 
-void WaitForMainThread();
-void WakeupNewThread();
+void WaitForPlatformInitialization();
+void SignalPlatformInitialized();
 void PostEventAndWait(EVENT_TYPE type,
                       WatcherHandle handle,
                       const std::vector<char>& new_path,
                       const std::vector<char>& old_path = std::vector<char>());
 
-void CommonInit();
+void CommonInit(Napi::Env);
 
-NAN_METHOD(SetCallback);
-NAN_METHOD(Watch);
-NAN_METHOD(Unwatch);
+Napi::Value SetCallback(const Napi::CallbackInfo &info);
+Napi::Value Watch(const Napi::CallbackInfo &info);
+Napi::Value Unwatch(const Napi::CallbackInfo &info);
 
 #endif  // SRC_COMMON_H_

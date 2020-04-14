@@ -3,17 +3,18 @@
 
 namespace {
 
-void Init(Local<Object> exports) {
-  CommonInit();
+Napi::Object Init(Napi::Env env, Napi::Object exports) {
+  CommonInit(env);
   PlatformInit();
 
-  Nan::SetMethod(exports, "setCallback", SetCallback);
-  Nan::SetMethod(exports, "watch", Watch);
-  Nan::SetMethod(exports, "unwatch", Unwatch);
+  exports["setCallback"] = Napi::Function::New(env, &SetCallback);
+  exports["watch"] = Napi::Function::New(env, &Watch);
+  exports["unwatch"] = Napi::Function::New(env, &Unwatch);
 
-  HandleMap::Initialize(exports);
+  HandleMap::Initialize(env, exports);
+  return exports;
 }
 
 }  // namespace
 
-NODE_MODULE(pathwatcher, Init)
+NODE_API_MODULE(pathwatcher, Init)

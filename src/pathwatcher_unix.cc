@@ -31,7 +31,7 @@ void PlatformInit() {
     return;
   }
 
-  WakeupNewThread();
+  SignalPlatformInitialized();
 }
 
 void PlatformThread() {
