@@ -1,4 +1,5 @@
 path = require 'path'
+{isMainThread} = require 'worker_threads'
 
 async = require 'async'
 {Emitter, Disposable} = require 'event-kit'
@@ -24,6 +25,9 @@ class Directory
   # * `symlink` (optional) A {Boolean} indicating if the path is a symlink.
   #   (default: false)
   constructor: (directoryPath, @symlink=false, includeDeprecatedAPIs=Grim.includeDeprecatedAPIs) ->
+    if !isMainThread
+      throw new Error('Pathwatcher is only available in the main thread')
+
     @emitter = new Emitter
 
     if includeDeprecatedAPIs

@@ -3,6 +3,7 @@ binding = require '../build/Release/pathwatcher.node'
 {Emitter} = require 'event-kit'
 fs = require 'fs'
 path = require 'path'
+{isMainThread} = require 'worker_threads'
 
 handleWatchers = null
 
@@ -115,6 +116,9 @@ class PathWatcher
     @handleWatcher.closeIfNoListener()
 
 exports.watch = (pathToWatch, callback) ->
+  if !isMainThread
+    throw new Error('Pathwatcher is only available in the main thread')
+
   unless handleWatchers?
     handleWatchers = new HandleMap
     binding.setCallback (event, handle, filePath, oldFilePath) ->
@@ -123,11 +127,17 @@ exports.watch = (pathToWatch, callback) ->
   new PathWatcher(path.resolve(pathToWatch), callback)
 
 exports.closeAllWatchers = ->
+  if !isMainThread
+    throw new Error('Pathwatcher is only available in the main thread')
+
   if handleWatchers?
     watcher.close() for watcher in handleWatchers.values()
     handleWatchers.clear()
 
 exports.getWatchedPaths = ->
+  if !isMainThread
+    throw new Error('Pathwatcher is only available in the main thread')
+
   paths = []
   if handleWatchers?
     paths.push(watcher.path) for watcher in handleWatchers.values()

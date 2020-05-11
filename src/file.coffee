@@ -1,5 +1,6 @@
 crypto = require 'crypto'
 path = require 'path'
+{isMainThread} = require 'worker_threads'
 
 _ = require 'underscore-plus'
 {Emitter, Disposable} = require 'event-kit'
@@ -28,6 +29,9 @@ class File
   # * `filePath` A {String} containing the absolute path to the file
   # * `symlink` (optional) A {Boolean} indicating if the path is a symlink (default: false).
   constructor: (filePath, @symlink=false, includeDeprecatedAPIs=Grim.includeDeprecatedAPIs) ->
+    if !isMainThread
+      throw new Error('Pathwatcher is only available in the main thread')
+
     filePath = path.normalize(filePath) if filePath
     @path = filePath
     @emitter = new Emitter
